@@ -1478,7 +1478,7 @@ def ocr_detect():
                 img_pil.convert('RGB').save(image_buffer, format='JPEG', quality=90)
                 image_base64 = base64.b64encode(image_buffer.getvalue()).decode('utf-8')
 
-                model_name = os.environ.get('GEMINI_VISION_MODEL', 'gemini-2.5-flash')
+                model_name = os.environ.get('GEMINI_VISION_MODEL', 'gemini-3.8-flash')
                 api_url = (
                     f'https://generativelanguage.googleapis.com/v1beta/'
                     f'models/{model_name}:generateContent'
