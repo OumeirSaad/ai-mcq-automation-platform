@@ -1461,24 +1461,92 @@ def ocr_detect():
             except Exception as vision_e:
                 logger.error(f'Google Vision API fallback failed: {vision_e}')
         # Final fallback: Vision-Language AI (Gemini/GPT-4 Vision)
+        
+        # Final fallback: Gemini Vision
         if not best_text.strip():
-            logger.warning('All OCR and Vision API attempts failed. Trying Vision-Language AI (Gemini/GPT-4 Vision) as final fallback...')
+            logger.warning('OCR failed. Trying Gemini Vision fallback...')
             try:
-                # This is a placeholder for actual Gemini/GPT-4 Vision API integration
-                # You must provide your own API key and endpoint
-                # Example prompt:
-                # "This is an image of a multiple choice question. Please read the question and give the correct option (A, B, C, D):"
-                # Send the image and prompt to the API and parse the response
-                # For now, just log and return a not-implemented message
-                logger.info('Vision-Language AI fallback would be called here (Gemini/GPT-4 Vision).')
-                return jsonify({
-                    'success': False, 
-                    'error': 'Vision-Language AI fallback (Gemini/GPT-4 Vision) not implemented. Please integrate your API key and endpoint.',
-                    'text': '',
-                    'mcqs': []
-                })
+                import requests
+                import base64
+                import io
+
+                if not GEMINI_API_KEY:
+                    raise ValueError('GEMINI_API_KEY is not configured in Railway Variables')
+
+                # Convert image to JPEG and encode it
+                image_buffer = io.BytesIO()
+                img_pil.convert('RGB').save(image_buffer, format='JPEG', quality=90)
+                image_base64 = base64.b64encode(image_buffer.getvalue()).decode('utf-8')
+
+                model_name = os.environ.get('GEMINI_VISION_MODEL', 'gemini-2.5-flash')
+                api_url = (
+                    f'https://generativelanguage.googleapis.com/v1beta/'
+                    f'models/{model_name}:generateContent'
+                )
+
+                prompt = """
+                Read this image carefully and extract all visible text.
+                Preserve the exact question wording and all multiple-choice options.
+                Do not solve the questions and do not select or suggest answers.
+                Return only the extracted text. If something is unreadable,
+                mark it as [unreadable].
+                """
+
+                response = requests.post(
+                    api_url,
+                    headers={
+                        'Content-Type': 'application/json',
+                        'x-goog-api-key': GEMINI_API_KEY
+                    },
+                    json={
+                        'contents': [{
+                            'parts': [
+                                {'text': prompt},
+                                {
+                                    'inline_data': {
+                                        'mime_type': 'image/jpeg',
+                                        'data': image_base64
+                                    }
+                                }
+                            ]
+                        }],
+                        'generationConfig': {
+                            'temperature': 0.1,
+                            'maxOutputTokens': 4096
+                        }
+                    },
+                    timeout=60
+                )
+
+                if response.status_code != 200:
+                    raise ValueError(
+                        f'Gemini API error {response.status_code}: '
+                        f'{response.text[:500]}'
+                    )
+
+                result = response.json()
+                candidates = result.get('candidates', [])
+
+                if not candidates:
+                    raise ValueError('Gemini returned no candidates')
+
+                parts = candidates[0].get('content', {}).get('parts', [])
+                gemini_text = '\n'.join(
+                    part.get('text', '')
+                    for part in parts
+                    if part.get('text')
+                ).strip()
+
+                if not gemini_text:
+                    raise ValueError('Gemini returned empty text')
+
+                best_text = gemini_text
+                logger.info(
+                    f'Gemini Vision extracted {len(best_text)} characters'
+                )
+
             except Exception as vla_e:
-                logger.error(f'Vision-Language AI fallback failed: {vla_e}')
+                logger.error(f'Gemini Vision fallback failed: {vla_e}')
         if not best_text.strip() or len(best_text.strip()) < 10:
             logger.error('OCR failed to extract meaningful text from the image.')
             return jsonify({
