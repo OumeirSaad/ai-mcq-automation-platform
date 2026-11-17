@@ -22,7 +22,7 @@ import google.generativeai as genai
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support   import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
 import time
 import re
@@ -1467,7 +1467,7 @@ def ocr_detect():
             logger.warning('OCR failed. Trying Gemini Vision fallback...')
             try:
                 import requests
-                import base64
+                
                 import io
 
                 if not GEMINI_API_KEY:
